@@ -10,8 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Configure Git Safe Directory
+        run: git config --global --add safe.directory /home/runner/work/squaremind-chess/squaremind-chess
+
       - name: Checkout Source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
