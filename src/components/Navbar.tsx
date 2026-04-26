@@ -11,7 +11,11 @@ import {
     MenuItem,
 } from '@mui/material';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu as MenuIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { 
+    Menu as MenuIcon, 
+    ArrowBack as ArrowBackIcon,
+    AdminPanelSettings as AdminIcon 
+} from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import ChessIcon from './ChessIcon';
 
@@ -76,13 +80,15 @@ const Navbar: React.FC = () => {
     const loggedInMenuItems = [
         <MenuItem key="profile" sx={menuItemSx} onClick={() => navigateAndClose(`/profile/${currentUser!.uid}`)}>Profile</MenuItem>,
         <MenuItem key="friends" sx={menuItemSx} onClick={() => navigateAndClose('/friends')}>Friends</MenuItem>,
+        <MenuItem key="admin" sx={menuItemSx} onClick={() => navigateAndClose('/admin/dashboard')}>Admin</MenuItem>,
         <MenuItem key="logout" sx={menuItemSx} onClick={handleLogout}>Logout</MenuItem>
     ];
 
     const loggedOutMenuItems = [
         <MenuItem key="login" sx={menuItemSx} onClick={() => navigateAndClose('/login')}>Login</MenuItem>,
         <MenuItem key="guest" sx={menuItemSx} onClick={handleGuestSignIn}>Play as Guest</MenuItem>,
-        <MenuItem key="signup" sx={menuItemSx} onClick={() => navigateAndClose('/signup')}>Sign Up</MenuItem>
+        <MenuItem key="signup" sx={menuItemSx} onClick={() => navigateAndClose('/signup')}>Sign Up</MenuItem>,
+        <MenuItem key="admin" sx={menuItemSx} onClick={() => navigateAndClose('/admin/dashboard')}>Admin</MenuItem>
     ];
 
     return (
@@ -124,6 +130,9 @@ const Navbar: React.FC = () => {
                                 <Button onClick={() => navigate('/friends')} sx={buttonSx}>
                                     FRIENDS
                                 </Button>
+                                <Button onClick={() => navigate('/admin/dashboard')} sx={buttonSx} startIcon={<AdminIcon />}>
+                                    ADMIN
+                                </Button>
                                 <Button onClick={handleLogout} sx={buttonSx}>
                                     LOGOUT
                                 </Button>
@@ -138,6 +147,9 @@ const Navbar: React.FC = () => {
                                 </Button>
                                 <Button component={Link} to="/signup" sx={buttonSx}>
                                     SIGN UP
+                                </Button>
+                                <Button onClick={() => navigate('/admin/dashboard')} sx={buttonSx} startIcon={<AdminIcon />}>
+                                    ADMIN
                                 </Button>
                             </>
                         )}
