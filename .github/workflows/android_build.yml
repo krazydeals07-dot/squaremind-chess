@@ -6,9 +6,6 @@ on:
       - main
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,16 +16,13 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Fix permissions
-        run: sudo chown -R runner:docker $GITHUB_WORKSPACE
-
       - name: Fix Git Safe Directory
         run: git config --global --add safe.directory "*"
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           cache: 'npm'
 
       - name: Setup Java 21
@@ -44,7 +38,7 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Build Web Project
-        run: npm run build
+        run: npx vite build
 
       - name: Capacitor Sync
         run: npx cap sync android
