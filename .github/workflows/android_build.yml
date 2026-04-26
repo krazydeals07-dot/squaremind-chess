@@ -48,13 +48,16 @@ jobs:
           npx cap sync android
           npx cap copy android
 
+      - name: List Android Directory
+        run: ls -R android
+
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace > build_logs.txt 2>&1 || (cat build_logs.txt | grep -A 20 "error:" || cat build_logs.txt | tail -n 50 && exit 1)
+          ./gradlew assembleDebug --no-daemon --stacktrace --scan -Pandroid.experimental.privacysandboxsdk.enable=false
 
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
