@@ -48,14 +48,16 @@ jobs:
           npx cap sync android
           npx cap copy android
 
-      - name: List Android Directory
-        run: ls -R android
+      - name: Agree to Gradle Terms
+        run: |
+          mkdir -p ~/.gradle
+          echo "systemProp.org.gradle.internal.publish.checksums.to.gradle.enterprise=true" > ~/.gradle/gradle.properties
 
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace --scan -Pandroid.experimental.privacysandboxsdk.enable=false
+          ./gradlew assembleDebug --no-daemon --stacktrace -Dorg.gradle.welcome=never -Pandroid.plugin.validation.enabled=false -Pandroid.nonTransitiveRClass=false
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
