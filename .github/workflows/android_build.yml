@@ -17,11 +17,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          persist-credentials: false
+
+      - name: Fix permissions
+        run: sudo chown -R runner:docker $GITHUB_WORKSPACE
 
       - name: Fix Git Safe Directory
-        run: |
-          git config --global --add safe.directory /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        run: git config --global --add safe.directory "*"
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
