@@ -43,11 +43,13 @@ jobs:
       - name: Build Web Project
         run: npx vite build
 
-      - name: Create Missing Assets Directory
+      - name: Create Assets Directory
         run: mkdir -p android/app/src/main/assets
 
       - name: Capacitor Sync
-        run: npx cap sync android
+        run: |
+          npx cap sync android
+          npx cap copy android
 
       - name: Agree to Gradle Terms
         run: |
@@ -55,10 +57,7 @@ jobs:
           echo "systemProp.org.gradle.internal.publish.checksums.to.gradle.enterprise=true" > ~/.gradle/gradle.properties
 
       - name: Build Debug APK
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace -Dorg.gradle.welcome=never -Pandroid.plugin.validation.enabled=false -Pandroid.nonTransitiveRClass=false
+        run: cd android && chmod +x gradlew && ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
