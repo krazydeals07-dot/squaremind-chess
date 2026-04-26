@@ -12,16 +12,14 @@ jobs:
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Fix Git Safe Directory
-        run: git config --global --add safe.directory /home/runner/work/squaremind-chess/squaremind-chess
+        run: git config --global --add safe.directory "*"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           cache: 'npm'
 
       - name: Setup Java 21
@@ -42,15 +40,11 @@ jobs:
       - name: Capacitor Sync
         run: npx cap sync android
 
-      - name: Bypass Google Services Check
-        run: |
-          sed -i 's/apply plugin: '\''com.google.gms.google-services'\''/\/\/ apply plugin: '\''com.google.gms.google-services'\''/g' android/app/build.gradle
-          sed -i '/com.google.gms.google-services/s/^/\/\//' android/app/build.gradle
-
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
+          ./gradlew clean
           ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK Artifact
