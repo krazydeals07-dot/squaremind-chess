@@ -9,6 +9,8 @@ import {
     IconButton,
     Menu,
     MenuItem,
+    ListItemIcon,
+    ListItemText
 } from '@mui/material';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -80,7 +82,10 @@ const Navbar: React.FC = () => {
     const loggedInMenuItems = [
         <MenuItem key="profile" sx={menuItemSx} onClick={() => navigateAndClose(`/profile/${currentUser!.uid}`)}>Profile</MenuItem>,
         <MenuItem key="friends" sx={menuItemSx} onClick={() => navigateAndClose('/friends')}>Friends</MenuItem>,
-        <MenuItem key="admin" sx={menuItemSx} onClick={() => navigateAndClose('/admin/dashboard')}>Admin</MenuItem>,
+        <MenuItem key="admin" sx={menuItemSx} onClick={() => navigateAndClose('/admin/login')}>
+            <ListItemIcon sx={{ minWidth: '35px' }}><AdminIcon sx={{ color: 'black' }} /></ListItemIcon>
+            <ListItemText primary="Admin Panel" primaryTypographyProps={{ sx: menuItemSx }} />
+        </MenuItem>,
         <MenuItem key="logout" sx={menuItemSx} onClick={handleLogout}>Logout</MenuItem>
     ];
 
@@ -88,7 +93,10 @@ const Navbar: React.FC = () => {
         <MenuItem key="login" sx={menuItemSx} onClick={() => navigateAndClose('/login')}>Login</MenuItem>,
         <MenuItem key="guest" sx={menuItemSx} onClick={handleGuestSignIn}>Play as Guest</MenuItem>,
         <MenuItem key="signup" sx={menuItemSx} onClick={() => navigateAndClose('/signup')}>Sign Up</MenuItem>,
-        <MenuItem key="admin" sx={menuItemSx} onClick={() => navigateAndClose('/admin/dashboard')}>Admin</MenuItem>
+        <MenuItem key="admin" sx={menuItemSx} onClick={() => navigateAndClose('/admin/login')}>
+            <ListItemIcon sx={{ minWidth: '35px' }}><AdminIcon sx={{ color: 'black' }} /></ListItemIcon>
+            <ListItemText primary="Admin Panel" primaryTypographyProps={{ sx: menuItemSx }} />
+        </MenuItem>
     ];
 
     return (
@@ -130,12 +138,12 @@ const Navbar: React.FC = () => {
                                 <Button onClick={() => navigate('/friends')} sx={buttonSx}>
                                     FRIENDS
                                 </Button>
-                                <Button onClick={() => navigate('/admin/dashboard')} sx={buttonSx} startIcon={<AdminIcon />}>
-                                    ADMIN
-                                </Button>
                                 <Button onClick={handleLogout} sx={buttonSx}>
                                     LOGOUT
                                 </Button>
+                                <IconButton onClick={() => navigate('/admin/login')} sx={{ color: 'black', ml: 1 }}>
+                                    <AdminIcon />
+                                </IconButton>
                             </>
                         ) : (
                             <>
@@ -148,9 +156,9 @@ const Navbar: React.FC = () => {
                                 <Button component={Link} to="/signup" sx={buttonSx}>
                                     SIGN UP
                                 </Button>
-                                <Button onClick={() => navigate('/admin/dashboard')} sx={buttonSx} startIcon={<AdminIcon />}>
-                                    ADMIN
-                                </Button>
+                                <IconButton onClick={() => navigate('/admin/login')} sx={{ color: 'black', ml: 1 }}>
+                                    <AdminIcon />
+                                </IconButton>
                             </>
                         )}
                         {showBackButton && (
