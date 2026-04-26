@@ -17,7 +17,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          persist-credentials: false
 
       - name: Fix Git Safe Directory
         run: git config --global --add safe.directory "*"
@@ -45,6 +44,7 @@ jobs:
 
       - name: Capacitor Sync
         run: |
+          npx cap update android
           npx cap sync android
           npx cap copy android
 
@@ -59,7 +59,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace -Dorg.gradle.welcome=never -Pandroid.plugin.validation.enabled=false -Pandroid.nonTransitiveRClass=false
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
