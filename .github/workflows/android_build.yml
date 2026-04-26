@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Fix Git Safe Directory
         run: git config --global --add safe.directory "*"
@@ -25,6 +26,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
@@ -46,16 +48,13 @@ jobs:
           npx cap sync android
           npx cap copy android
 
-      - name: List Android Directory
-        run: ls -R android
-
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace > build_logs.txt 2>&1 || (cat build_logs.txt | grep -A 20 "error:" || cat build_logs.txt | tail -n 50 && exit 1)
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
