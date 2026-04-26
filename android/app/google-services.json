@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "556311265421",
+    "firebase_url": "https://squaremind-ad621-default-rtdb.firebaseio.com",
+    "project_id": "squaremind-ad621",
+    "storage_bucket": "squaremind-ad621.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:556311265421:android:dfc52ec1005d5c54c622c4",
+        "android_client_info": {
+          "package_name": "com.squaremind.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "556311265421-cak9m0s8cunn2gqr9uvb0jgn0244mes3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUDGP5Cyqkucj01pR4rv8oZe6gOso1jJY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "556311265421-cak9m0s8cunn2gqr9uvb0jgn0244mes3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

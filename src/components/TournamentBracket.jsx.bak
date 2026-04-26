@@ -1,0 +1,68 @@
+import React, { useState, useEffect } from 'react';
+import { db } from '../firebase';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import './TournamentBracket.css'; // Import the CSS file
+
+function TournamentBracket() {
+  const [rounds, setRounds] = useState([]);
+
+  useEffect(() => {
+    // Query games and order them by round and then by match number
+    const gamesQuery = query(collection(db, 'gameResults'), orderBy('round'), orderBy('matchInRound'));
+
+    const unsubscribe = onSnapshot(gamesQuery, (snapshot) => {
+      const gamesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Group games by round
+      const roundsData = gamesData.reduce((acc, game) => {
+        const roundNum = game.round - 1;
+        if (!acc[roundNum]) {
+          acc[roundNum] = [];
+        }
+        acc[roundNum].push(game);
+        return acc;
+      }, []);
+
+      setRounds(roundsData);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return (
+    <div className="bracket-container">
+      <div className="rounds-container">
+        {rounds.length > 0 ? (
+          rounds.map((roundGames, roundIndex) => (
+            <div className="round" key={roundIndex}>
+              <h3 className="round-title">Round {roundIndex + 1}</h3>
+              <div className="matches">
+                {roundGames.map(game => (
+                  <div className="match" key={game.id}>
+                    <div className="match-content">
+                        <div className={`team ${game.winner === game.player1 ? 'winner' : ''}`}>
+                            <span className="name">{game.player1 || 'TBD'}</span>
+                            <span className="score">{game.score?.split('-')[0]}</span>
+                        </div>
+                        <div className="vs-separator">vs</div>
+                        <div className={`team ${game.winner === game.player2 ? 'winner' : ''}`}>
+                            <span className="name">{game.player2 || 'TBD'}</span>
+                             <span className="score">{game.score?.split('-')[1]}</span>
+                        </div>
+                    </div>
+                    {/* Basic horizontal connector */}
+                    {rounds.length > roundIndex + 1 && <div className="match-connector"></div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        ) : (
+          <p>Loading tournament bracket...</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default TournamentBracket;

@@ -2,13 +2,17 @@
 # see: https://developers.google.com/idx/guides/customize-idx-env
 { pkgs, ... }: {
   # Which nixpkgs channel to use.
-  channel = "stable-24.05"; # or "unstable"
+  channel = "unstable"; # or "stable-24.05"
   # Use https://search.nixos.org/packages to find packages
   packages = [
-    pkgs.nodejs_20
+    pkgs.nodejs_22
+    pkgs.jdk
+    pkgs.android-studio
   ];
   # Sets environment variables in the workspace
-  env = {};
+  env = {
+    CAPACITOR_ANDROID_STUDIO_PATH = "${pkgs.android-studio}/bin/studio.sh";
+  };
   idx = {
     # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
     extensions = [
@@ -35,4 +39,5 @@
       };
     };
   };
+  # Trigger rebuild
 }

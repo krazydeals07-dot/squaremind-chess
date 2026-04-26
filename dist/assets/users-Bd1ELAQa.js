@@ -1,0 +1,1 @@
+import{c as r,d as t,g as n,x as c,F as u,aV as d}from"./index-Dj7hiS9w.js";const p=async()=>{const s=r(t,"users");return(await n(s)).docs.map(o=>({uid:o.id,...o.data()}))},l=async(s,e)=>{const a=c(t,"users",s);await u(a,e)},g=async s=>{const e=c(t,"users",s);await d(e)};export{g as d,p as g,l as u};
