@@ -16,13 +16,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install Dependencies
-        run: |
-          npm install --legacy-peer-deps
-          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
+        run: npm install --legacy-peer-deps
+
+      - name: Install Capacitor Core & CLI
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Build Web Project
         run: CI=false npm run build
