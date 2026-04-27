@@ -5,7 +5,7 @@ This template provides a minimal setup to get React working in Vite with HMR and
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https.swc.rs/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
 ## Expanding the ESLint configuration
 
@@ -69,4 +69,4 @@ export default defineConfig([
 ```
 
 ---
-*हा प्रकल्प आता स्वयंचलित APK बिल्डसाठी कॉन्फिगर केला आहे. (v4)*
+*हा प्रकल्प आता स्वयंचलित APK बिल्डसाठी कॉन्फिगर केला आहे. (v5-final)*
