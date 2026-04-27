@@ -26,8 +26,8 @@ jobs:
       run: |
         npm run build
         npx cap sync android
-    - name: Build Android App
-      run: cd android && ./gradlew assembleDebug
+    - name: Clean and Build Android App
+      run: cd android && ./gradlew clean assembleDebug --stacktrace
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
