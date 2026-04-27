@@ -26,6 +26,8 @@ jobs:
       run: |
         npm run build
         npx cap sync android
+    - name: Clean Gradle Cache
+      run: rm -rf ~/.gradle/caches
     - name: Clean and Build Android App
       run: cd android && ./gradlew clean assembleDebug --stacktrace
     - name: Upload APK
