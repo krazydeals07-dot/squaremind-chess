@@ -38,7 +38,7 @@ android {
 
     packagingOptions {
         resources {
-            excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/NOTICE', 'META-INF/ASL2.0', 'META-INF/LGPL2.1']
+            excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/NOTICE', 'META-INF/ASL2.0', 'META-INF/LGPL2.1', 'META-INF/kotlin-stdlib-jdk7.kotlin_module', 'META-INF/kotlin-stdlib-jdk8.kotlin_module', 'META-INF/kotlin-stdlib.kotlin_module']
         }
     }
 }
