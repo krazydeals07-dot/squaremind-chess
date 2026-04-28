@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">SquareMind</string>
-    <string name="title_activity_main">SquareMind</string>
+    <string name="app_name">SQUAREMIND</string>
+    <string name="title_activity_main">SQUAREMIND</string>
     <string name="package_name">com.squaremind.chess</string>
     <string name="custom_url_scheme">com.squaremind.chess</string>
 </resources>
