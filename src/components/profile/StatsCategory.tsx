@@ -1,6 +1,7 @@
-import { Paper, Typography, Grid, Box, Icon } from '@mui/material';
+import { Paper, Typography, Grid, Box, Icon, CircularProgress } from '@mui/material';
 import { BarChart, EmojiEvents } from '@mui/icons-material';
-import { Stats } from '../../types';
+import useStats from '../../hooks/useStats';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface StatCardProps {
     label: string;
@@ -32,15 +33,22 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, icon, color = '#FFA50
 
 interface StatsCategoryProps {
     title: string;
-    stats: Stats | undefined;
+    statType: 'aiStats' | 'stats' | 'tournamentsStats';
     icon: React.ReactElement;
 }
 
-const StatsCategory: React.FC<StatsCategoryProps> = ({ title, stats, icon }) => {
+const StatsCategory: React.FC<StatsCategoryProps> = ({ title, statType, icon }) => {
+    const { currentUser } = useAuth();
+    const { stats, loading } = useStats(currentUser?.uid || '', statType);
+
     const safeNumber = (value: any): number => {
         const num = Number(value);
         return isNaN(num) ? 0 : num;
     };
+
+    if (loading) {
+        return <CircularProgress size={20} color="warning" />;
+    }
 
     const played = safeNumber(stats?.gamesPlayed);
     const won = safeNumber(stats?.gamesWon);

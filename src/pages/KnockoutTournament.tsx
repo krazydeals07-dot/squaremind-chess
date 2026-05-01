@@ -174,7 +174,7 @@ const KnockoutTournament = () => {
 
   const rules = [
     'Players are auto-paired upon joining.',
-    'Each match uses a 8-minute timer per player, with a 2-second increment per move.',
+    'Each match uses a 8-minute timer per player.',
     'Winning 7 consecutive games makes you a Daily Winner!',
     'Prizes are awarded to the top 10 players daily.',
     'Cheating will result in a permanent ban.',

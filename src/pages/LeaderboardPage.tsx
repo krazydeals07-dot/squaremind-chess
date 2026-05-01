@@ -42,7 +42,7 @@ const LeaderboardPage = () => {
                         <ChessIcon />
                     </Box>
                     <Typography variant="h5" align="center" sx={{ fontFamily: '"Orbitron", sans-serif', mb: 0.5, color: '#FFA500', textTransform: 'uppercase', fontWeight: 'bold' }}>
-                        SQUAREMIND LEADERBOARD
+                        LEADERBOARD
                     </Typography>
                 </Box>
                 {loading ? (
@@ -51,8 +51,8 @@ const LeaderboardPage = () => {
                     </Box>
                 ) : (
                     <>
-                        <TableContainer sx={{ overflow: 'hidden' }}>
-                            <Table size="small">
+                        <TableContainer sx={{ overflowX: 'auto', '&::-webkit-scrollbar': { height: '8px' }, '&::-webkit-scrollbar-thumb': { backgroundColor: '#FFA500', borderRadius: '4px' } }}>
+                            <Table size="small" sx={{ minWidth: 500 }}>
                                 <TableHead>
                                     <TableRow>
                                         <TableCell sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.9rem', py: 0.5 }}>Rank</TableCell>

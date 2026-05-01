@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -198,17 +197,17 @@ const LiveGame = () => {
   }, [game]);
 
   if (loading) return (
-    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#1a1a1a' }}>
       <CircularProgress />
     </Box>
   );
 
   return (
-    <Box sx={{ p: 2, background: '#1a1a1a', minHeight: '100vh', color: 'white' }}>
+    <Box sx={{ p: 2, background: '#1a1a1a', color: 'white' }}>
       <Grid container spacing={2}>
         {/* Chessboard */}
         <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 2, background: '#2c2c2c' }}>
+          <Paper sx={{ p: 2, background: '#2c2c2c', height: '100%' }}>
             <Typography variant="h5" align="center" mb={2}>
               Live Game
             </Typography>
@@ -227,7 +226,7 @@ const LiveGame = () => {
 
         {/* Game Info, Chat, Moves */}
         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2, background: '#2c2c2c', height: '100%' }}>
+          <Paper sx={{ p: 2, background: '#2c2c2c', display: 'flex', flexDirection: 'column' }}>
             {/* Player Info */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
               <Box>

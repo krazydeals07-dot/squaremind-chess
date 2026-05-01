@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db, database } from '../firebase';
-import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, getDoc, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, getDoc, limit, orderBy } from 'firebase/firestore';
 import { ref, onValue } from "firebase/database";
 import {
     Container, Typography, Grid, TextField, Button,
@@ -32,8 +32,7 @@ interface OnlineStatus {
 const Friends = () => {
     const { currentUser } = useAuth();
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
-    const [initialUsers, setInitialUsers] = useState<UserSearchResult[]>([]);
+    const [allUsers, setAllUsers] = useState<UserSearchResult[]>([]);
     const [friends, setFriends] = useState<UserSearchResult[]>([]);
     const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
     const [sentRequests, setSentRequests] = useState<string[]>([]);
@@ -47,127 +46,81 @@ const Friends = () => {
     useEffect(() => {
         if (!currentUser) return;
 
-        let unsubscribeFriends: (() => void) | null = null;
-
-        const unsubUser = onSnapshot(doc(db, 'users', currentUser.uid), (userDoc) => {
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const unsubscribeUser = onSnapshot(userDocRef, (userDoc) => {
             const userData = userDoc.data();
             if (userData) {
                 setFriendRequests(userData.friendRequests || []);
-                
+                setSentRequests(userData.sentFriendRequests || []);
                 const friendIds = userData.friends || [];
-                
-                if (unsubscribeFriends) {
-                    unsubscribeFriends();
-                }
-
                 if (friendIds.length > 0) {
-                    // Firestore 'in' query supports up to 30 elements
-                    const friendsQuery = query(
-                        collection(db, 'users'), 
-                        where('__name__', 'in', friendIds.slice(0, 30))
-                    );
-                    
-                    unsubscribeFriends = onSnapshot(friendsQuery, (snapshot) => {
-                        const friendList = snapshot.docs.map(d => ({ ...d.data(), uid: d.id } as UserSearchResult));
-                        setFriends(friendList);
-
-                        // Status listeners
-                        friendList.forEach(friend => {
-                            const statusRef = ref(database, '/status/' + friend.uid);
-                            onValue(statusRef, (snapshot) => {
-                                setFriendStatuses(prev => ({...prev, [friend.uid]: snapshot.val()}));
-                            });
-                        });
-                    }, (err) => {
-                        console.error("Error fetching friend details:", err);
-                    });
+                    fetchFriendsDetails(friendIds);
                 } else {
                     setFriends([]);
                 }
             }
         });
 
-        return () => {
-            unsubUser();
-            if (unsubscribeFriends) unsubscribeFriends();
-        };
+        return () => unsubscribeUser();
     }, [currentUser]);
 
     useEffect(() => {
         if (tabValue === 2 && currentUser) {
-            fetchInitialUsers();
+            fetchAllUsers();
         }
     }, [tabValue, currentUser]);
 
-    const fetchInitialUsers = async () => {
-        if (!currentUser) return;
-        setLoading(true);
-        try {
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, limit(20));
-            const snapshot = await getDocs(q);
-            let userList = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as UserSearchResult));
-            const friendUIDs = new Set(friends.map(f => f.uid));
-            userList = userList.filter(user => user.uid !== currentUser.uid && !friendUIDs.has(user.uid));
-            setInitialUsers(userList);
-            setSearchResults(userList);
-        } catch (error) {
-            console.error("Error fetching initial users:", error);
-        }
-        setLoading(false);
-    };
+    const fetchFriendsDetails = (friendIds: string[]) => {
+        const friendsQuery = query(collection(db, 'users'), where('__name__', 'in', friendIds.slice(0, 30)));
+        const unsubscribe = onSnapshot(friendsQuery, (snapshot) => {
+            const friendList = snapshot.docs.map(d => ({ ...d.data(), uid: d.id } as UserSearchResult));
+            setFriends(friendList);
 
-    const handleSearch = async () => {
+            friendList.forEach(friend => {
+                const statusRef = ref(database, '/status/' + friend.uid);
+                onValue(statusRef, (snapshot) => {
+                    setFriendStatuses(prev => ({...prev, [friend.uid]: snapshot.val()}));
+                });
+            });
+        });
+        return unsubscribe;
+    };
+    
+    const fetchAllUsers = async () => {
         if (!currentUser) return;
-        if (!searchQuery.trim()) {
-            setSearchResults(initialUsers);
-            return;
-        }
         setLoading(true);
         try {
             const usersRef = collection(db, 'users');
-            const q = query(usersRef, 
-                            where('displayName', '>=', searchQuery),
-                            where('displayName', '<=', searchQuery + '\uf8ff')
-                           );
-            const snapshot = await getDocs(q);
-            let userList = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as UserSearchResult));
-            const friendUIDs = new Set(friends.map(f => f.uid));
-            userList = userList.filter(user => user.uid !== currentUser.uid && !friendUIDs.has(user.uid));
-            setSearchResults(userList);
+            const snapshot = await getDocs(usersRef);
+            const userList = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as UserSearchResult));
+            setAllUsers(userList);
         } catch (error) {
-            console.error("Error searching users:", error);
+            console.error("Error fetching all users:", error);
         }
         setLoading(false);
     };
 
     const sendFriendRequest = async (targetId: string) => {
         if (!currentUser || targetId === currentUser.uid) return;
-        const message = 'Hi! Let\'s be friends!';
         const targetUserRef = doc(db, 'users', targetId);
-
-        const targetDoc = await getDoc(targetUserRef);
-        if(targetDoc.exists()) {
-            const targetData = targetDoc.data();
-            if(targetData.friendRequests?.some((req: FriendRequest) => req.senderId === currentUser.uid)) {
-                alert("Friend request already sent.");
-                setSentRequests(prev => [...new Set([...prev, targetId])]);
-                return;
-            }
-        }
+        const currentUserRef = doc(db, 'users', currentUser.uid);
 
         await updateDoc(targetUserRef, {
             friendRequests: arrayUnion({
                 senderId: currentUser.uid,
                 senderName: currentUser.displayName || currentUser.email,
                 senderPhotoURL: currentUser.photoURL || '',
-                message
+                message: 'Wants to be your friend!'
             })
         });
-        alert('Friend request sent!');
-        setSentRequests(prev => [...prev, targetId]);
-    };
+        
+        await updateDoc(currentUserRef, {
+            sentFriendRequests: arrayUnion(targetId)
+        });
 
+        alert('Friend request sent!');
+    };
+    
     const acceptFriendRequest = async (request: FriendRequest) => {
         if (!currentUser) return;
         const currentUserRef = doc(db, 'users', currentUser.uid);
@@ -199,51 +152,17 @@ const Friends = () => {
         setTabValue(newValue);
     };
 
-    const renderFindFriends = () => {
-        return (
-            <List sx={{ width: '100%', mt: 2 }}>
-                {loading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3}}><CircularProgress /></Box>
-                ) : (
-                    searchResults.map(user => {
-                        const requestSent = sentRequests.includes(user.uid);
-
-                        return (
-                            <ListItem
-                                key={user.uid}
-                                sx={{ background: '#1c1c1e', mb: 1, borderRadius: '8px' }}
-                                secondaryAction={
-                                    requestSent ? (
-                                        <Button variant="contained" disabled>
-                                            Request Sent
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            variant="contained"
-                                            startIcon={<PersonAdd />}
-                                            onClick={() => sendFriendRequest(user.uid)}
-                                            sx={{
-                                                bgcolor: '#FFA500',
-                                                color: 'white',
-                                                '&:hover': {
-                                                    bgcolor: '#E08E00',
-                                                },
-                                            }}
-                                        >
-                                            Add Friend
-                                        </Button>
-                                    )
-                                }
-                            >
-                                <ListItemAvatar><Avatar src={user.photoURL} /></ListItemAvatar>
-                                <ListItemText primary={user.displayName} sx={{color: 'white'}} />
-                            </ListItem>
-                        );
-                    })
-                )}
-            </List>
+    const filteredUsers = useMemo(() => {
+        if (!searchQuery) {
+            return [];
+        }
+        const friendUIDs = new Set(friends.map(f => f.uid));
+        return allUsers.filter(user =>
+            user.uid !== currentUser?.uid &&
+            !friendUIDs.has(user.uid) &&
+            user.displayName.toLowerCase().includes(searchQuery.toLowerCase())
         );
-    };
+    }, [searchQuery, allUsers, friends, currentUser]);
 
     return (
         <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -264,7 +183,7 @@ const Friends = () => {
                         mb: 4,
                         '& .MuiTabs-indicator': { backgroundColor: '#FFA500' },
                         '& .MuiTab-root': { color: 'white', fontWeight: 'bold', fontSize: '0.875rem' },
-                        '& .Mui-selected': { color: '#4dabf5' },
+                        '& .Mui-selected': { color: '#FFA500' },
                     }}
                 >
                     <Tab label={`MY FRIENDS (${friends.length})`} />
@@ -310,7 +229,6 @@ const Friends = () => {
                                         hiddenLabel
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                                         InputProps={{ disableUnderline: true }}
                                         sx={{ 
                                             '& .MuiFilledInput-root': { 
@@ -324,20 +242,68 @@ const Friends = () => {
                                     />
                                 </Grid>
                                 <Grid item>
-                                    <Button 
+                                     <Button 
                                         variant="contained" 
-                                        onClick={handleSearch}
                                         sx={{ 
                                             bgcolor: '#FFA500', 
                                             '&:hover': { bgcolor: '#E08E00' },
-                                            height: '56px' // Match TextField height
+                                            height: '56px',
+                                            minWidth: '56px'
                                         }}
                                     >
                                         <Search />
                                     </Button>
                                 </Grid>
                             </Grid>
-                            {renderFindFriends()}
+                            <List sx={{ width: '100%', mt: 2 }}>
+                                {loading ? (
+                                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3}}><CircularProgress /></Box>
+                                ) : (
+                                    filteredUsers.map(user => {
+                                        const isFriend = friends.some(f => f.uid === user.uid);
+                                        const requestSent = sentRequests.includes(user.uid);
+                                        
+                                        return (
+                                            <ListItem
+                                                key={user.uid}
+                                                sx={{ background: '#1c1c1e', mb: 1, borderRadius: '8px' }}
+                                                secondaryAction={
+                                                    isFriend ? (
+                                                        <Button variant="contained" disabled>
+                                                            Already Friends
+                                                        </Button>
+                                                    ) : requestSent ? (
+                                                        <Button variant="contained" disabled>
+                                                            Request Sent
+                                                        </Button>
+                                                    ) : (
+                                                        <Button
+                                                            variant="contained"
+                                                            startIcon={<PersonAdd />}
+                                                            onClick={() => sendFriendRequest(user.uid)}
+                                                            sx={{
+                                                                bgcolor: '#FFA500',
+                                                                color: 'white',
+                                                                '&:hover': {
+                                                                    bgcolor: '#E08E00',
+                                                                },
+                                                            }}
+                                                        >
+                                                            Add Friend
+                                                        </Button>
+                                                    )
+                                                }
+                                            >
+                                                <ListItemAvatar><Avatar src={user.photoURL} /></ListItemAvatar>
+                                                <ListItemText primary={user.displayName} sx={{color: 'white'}} />
+                                            </ListItem>
+                                        );
+                                    })
+                                )}
+                                {searchQuery && !loading && filteredUsers.length === 0 && (
+                                     <Typography align="center" sx={{ color: 'gray', mt: 4 }}>No players found matching your search.</Typography>
+                                )}
+                            </List>
                         </Box>
                     )}
                 </Box>

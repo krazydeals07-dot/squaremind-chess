@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { CircularProgress, Box, createTheme, ThemeProvider } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext.tsx';
 import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 
 import AdminRoute from './components/AdminRoute';
 import PrivateRoute from './components/PrivateRoute';
@@ -66,17 +67,19 @@ const App: React.FC = () => {
     const location = useLocation();
 
     useEffect(() => {
-        const backButtonHandler = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-            if (location.pathname === '/') {
-                CapacitorApp.exitApp();
-            } else {
-                window.history.back();
-            }
-        });
+        if (Capacitor.isNativePlatform()) {
+            const backButtonHandler = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+                if (location.pathname === '/') {
+                    CapacitorApp.exitApp();
+                } else {
+                    window.history.back();
+                }
+            });
 
-        return () => {
-            backButtonHandler.then(h => h.remove());
-        };
+            return () => {
+                backButtonHandler.then(h => h.remove());
+            };
+        }
     }, [location]);
 
     return (
@@ -100,9 +103,6 @@ const App: React.FC = () => {
                             <Route path="/admin/tournament-types" element={<TournamentTypeManagement />} /> {/* New Route */}
                         </Route>
                     </Route>
-
-                    {/* Route for LiveTournamentGame outside of MainLayout */}
-                    <Route path="/tournament/:tournamentId/game/:gameId" element={<PrivateRoute><LiveTournamentGame /></PrivateRoute>} />
 
                     {/* Main Application Routes - These routes ALL use the MainLayout */}
                     <Route element={<MainLayout />}>
@@ -138,6 +138,9 @@ const App: React.FC = () => {
                         <Route path="/daily-knockout" element={<PrivateRoute><KnockoutTournament /></PrivateRoute>} />
                         <Route path="/live" element={<PrivateRoute><LiveGame /></PrivateRoute>} />
                         <Route path="/analysis/:gameId" element={<PrivateRoute><GameAnalysis /></PrivateRoute>} />
+                        
+                        {/* LiveTournamentGame moved inside MainLayout for consistent Header and Footer */}
+                        <Route path="/tournament/:tournamentId/game/:gameId" element={<PrivateRoute><LiveTournamentGame /></PrivateRoute>} />
                     </Route>
 
                     {/* Fallback for any other route */}

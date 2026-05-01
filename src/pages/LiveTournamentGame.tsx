@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTournamentGame } from '../hooks/useTournamentGame';
 import { Chessboard } from 'react-chessboard';
@@ -100,29 +100,37 @@ const LiveTournamentGame = () => {
       playerDetails
   } = useTournamentGame(gameId!, tournamentId);
 
-  const [boardWidth, setBoardWidth] = useState(500);
+  const [boardWidth, setBoardWidth] = useState(320);
   const boardContainerRef = useRef<HTMLDivElement>(null);
 
-  const handleCloseModal = useCallback(() => {
-    closeModal();
-    if (gameData?.tournamentId === 'daily-knockout') {
-        navigate('/daily-knockout');
-    } else {
-        navigate('/tournaments');
-    }
-  }, [closeModal, navigate, gameData?.tournamentId]);
-
-  useLayoutEffect(() => {
+  useEffect(() => {
     const updateSize = () => {
-      if (boardContainerRef.current) {
-        const { width, height } = boardContainerRef.current.getBoundingClientRect();
-        const newSize = Math.min(width * 0.9, height * 0.85, 560);
-        setBoardWidth(Math.max(250, newSize));
+      if (typeof window === 'undefined') return;
+      
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const isMobile = width < 900;
+      
+      let newSize;
+      if (isMobile) {
+        newSize = Math.min(width * 0.95, height * 0.5);
+      } else {
+        newSize = Math.min(width * 0.45, height * 0.7, 560);
       }
+      setBoardWidth(Math.max(250, newSize));
     };
-    window.addEventListener('resize', updateSize);
+    
     updateSize();
-    return () => window.removeEventListener('resize', updateSize);
+    window.addEventListener('resize', updateSize);
+    window.addEventListener('orientationchange', updateSize);
+    
+    const timer = setTimeout(updateSize, 100);
+    
+    return () => {
+        window.removeEventListener('resize', updateSize);
+        window.removeEventListener('orientationchange', updateSize);
+        clearTimeout(timer);
+    };
   }, []);
 
   const handleSendMessage = useCallback(async (message: string) => {
@@ -140,6 +148,15 @@ const LiveTournamentGame = () => {
     if (gameResult.includes('draw')) return <Handshake sx={{ fontSize: 60, color: '#61DAFB' }} />;
     return null;
   }, [gameResult]);
+
+  const handleCloseModal = useCallback(() => {
+    closeModal();
+    if (gameData?.tournamentId === 'daily-knockout') {
+        navigate('/daily-knockout');
+    } else {
+        navigate('/tournaments');
+    }
+  }, [closeModal, navigate, gameData?.tournamentId]);
 
   if (hookLoading || !playerDetails.white || !playerDetails.black) return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#1A1A2E' }}><CircularProgress color="warning" /></Box>;
 
@@ -164,48 +181,46 @@ const LiveTournamentGame = () => {
   ];
 
   return (
-    <Box sx={{ p: 0, m: 0, background: '#1A1A2E', minHeight: '100vh', color: 'white', display: 'flex', overflowY: { xs: 'auto', md: 'hidden' }}}>
-        <Grid container sx={{ height: { md: '100vh' } }}>
-            <Grid item xs={12} md={7} lg={8} ref={boardContainerRef} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: {xs: '60vh', md: '100vh'}, p: { xs: 1, md: 2 }}}>
-                <Stack direction="column" spacing={1} alignItems="center" sx={{ width: '100%', maxWidth: boardWidth }}>
-                    <Box sx={{ width: '100%', opacity: gameData.status === 'waiting' ? 0.5 : 1 }}>
-                        <CapturedPieces 
-                            title={`${opponentPlayerDetails.displayName}'s Captures`} 
-                            pieces={capturedBy[myColor]} 
-                            capturedPiecesColor={myColor} 
+    <Box sx={{ p: 0, m: 0, background: '#1A1A2E', minHeight: '100vh', color: 'white', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <Grid container sx={{ height: 'auto', flexGrow: 1 }}>
+            <Grid item xs={12} md={7} lg={8} ref={boardContainerRef} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: { xs: 1, md: 2 }, pt: {xs: 2, md: 2}}}>
+                <Box sx={{ width: '100%', maxWidth: boardWidth, opacity: gameData.status === 'waiting' ? 0.5 : 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <CapturedPieces 
+                        title={`${opponentPlayerDetails.displayName}'s Captures`} 
+                        pieces={capturedBy[myColor]} 
+                        capturedPiecesColor={myColor} 
+                    />
+                    <Paper elevation={10} sx={{ background: 'transparent', width: boardWidth, height: boardWidth, my: 1 }}>
+                        <Chessboard 
+                            id="TournamentBoard"
+                            boardWidth={boardWidth} 
+                            position={game.fen()} 
+                            onPieceDrop={onPieceDrop}
+                            onSquareClick={onSquareClick}
+                            boardOrientation={orientation}
+                            arePiecesDraggable={gameData.status === 'active' || gameData.status === 'ongoing'}
+                            customPieces={PieceRenderer}
+                            customSquareStyles={optionSquares}
+                            customBoardStyle={{ borderRadius: '8px', boxShadow: '0 5px 15px rgba(0, 0, 0, 0.5)' }}
+                            customDarkSquareStyle={{ backgroundColor: '#6B3F23' }}
+                            customLightSquareStyle={{ backgroundColor: '#EAD8C3' }}
                         />
-                        <Paper elevation={10} sx={{ background: 'transparent', width: '100%', maxWidth: boardWidth, my: 1 }}>
-                            <Chessboard 
-                                id="TournamentBoard"
-                                boardWidth={boardWidth} 
-                                position={game.fen()} 
-                                onPieceDrop={onPieceDrop}
-                                onSquareClick={onSquareClick}
-                                boardOrientation={orientation}
-                                arePiecesDraggable={gameData.status === 'active' || gameData.status === 'ongoing'}
-                                customPieces={PieceRenderer}
-                                customSquareStyles={optionSquares}
-                                customBoardStyle={{ borderRadius: '8px', boxShadow: '0 5px 15px rgba(0, 0, 0, 0.5)' }}
-                                customDarkSquareStyle={{ backgroundColor: '#6B3F23' }}
-                                customLightSquareStyle={{ backgroundColor: '#EAD8C3' }}
-                            />
-                        </Paper>
-                        <CapturedPieces 
-                            title="Your Captures" 
-                            pieces={capturedBy[opponentColor]} 
-                            capturedPiecesColor={opponentColor} 
-                        />
-                    </Box>
-                </Stack>
+                    </Paper>
+                    <CapturedPieces 
+                        title="Your Captures" 
+                        pieces={capturedBy[opponentColor]} 
+                        capturedPiecesColor={opponentColor} 
+                    />
+                </Box>
             </Grid>
 
-            <Grid item xs={12} md={5} lg={4} sx={{ height: { md: '100vh' }, minHeight: {xs: 'auto', md: '100vh'}, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <Paper sx={{ p: 2, background: '#282C34', height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 0, overflow: 'hidden' }}>
+            <Grid item xs={12} md={5} lg={4} sx={{ height: 'auto', display: 'flex', flexDirection: 'column' }}>
+                <Paper sx={{ p: { xs: 1, md: 2 }, background: '#282C34', height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 0, overflow: 'hidden' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                         <IconButton onClick={() => navigate(-1)} sx={{ color: '#61DAFB' }}>
                             <ArrowBack />
                         </IconButton>
-                        <Typography variant="h5" sx={{ color: '#61DAFB', flexGrow: 1, textAlign: 'center', fontFamily: 'Orbitron', mr: 5 }}>Match #{gameId?.split('-m')[1] || ''}</Typography>
+                        <Typography variant="h5" sx={{ color: '#61DAFB', flexGrow: 1, textAlign: 'center', fontFamily: 'Orbitron', mr: 5, fontSize: { xs: '1.2rem', md: '1.5rem' } }}>Match #{gameId?.split('-m')[1] || ''}</Typography>
                     </Box>
                     
                     <Box sx={{ textAlign: 'center', mb: 1 }}>
@@ -218,28 +233,28 @@ const LiveTournamentGame = () => {
                         )}
                     </Box>
 
-                    <Stack spacing={1.5} sx={{ mb: 2, opacity: gameData.status === 'waiting' ? 0.6 : 1 }}>
+                    <Stack spacing={1} sx={{ mb: 2, opacity: gameData.status === 'waiting' ? 0.6 : 1 }}>
                         <PlayerInfoBox name={opponentPlayerDetails.displayName} photoURL={opponentPlayerDetails.photoURL} timer={timers[opponentColor]} isTurn={!isMyTurn} gameStatus={gameData.status} />
                         <PlayerInfoBox name={myPlayerDetails.displayName} photoURL={myPlayerDetails.photoURL} timer={timers[myColor]} isTurn={isMyTurn} isCurrentUser gameStatus={gameData.status} />
                     </Stack>
                     
                     {drawOffer && drawOffer.to === currentUser?.uid ? (
-                        <Paper elevation={4} sx={{ p: 2, my: 1, background: '#4CAF50' }}>
-                            <Typography align="center" sx={{ mb: 1 }}>{opponentPlayerDetails.displayName} offers a draw.</Typography>
+                        <Paper elevation={4} sx={{ p: 1.5, my: 1, background: '#4CAF50' }}>
+                            <Typography align="center" sx={{ mb: 1, fontSize: '0.9rem' }}>{opponentPlayerDetails.displayName} offers a draw.</Typography>
                             <Stack direction="row" spacing={2} justifyContent="center">
-                                <Button startIcon={<Check />} variant="contained" color="success" onClick={acceptDraw}>Accept</Button>
-                                <Button startIcon={<Close />} variant="contained" color="error" onClick={declineDraw}>Decline</Button>
+                                <Button startIcon={<Check />} variant="contained" color="success" size="small" onClick={acceptDraw}>Accept</Button>
+                                <Button startIcon={<Close />} variant="contained" color="error" size="small" onClick={declineDraw}>Decline</Button>
                             </Stack>
                         </Paper>
                     ) : (
-                        <Stack direction="row" spacing={1} justifyContent="center" sx={{ my: 2 }}>
-                            <Button startIcon={<Flag />} variant="contained" onClick={resign} disabled={gameData.status !== 'active' && gameData.status !== 'ongoing'} sx={{ bgcolor: '#b71c1c', '&:hover': { bgcolor: '#9a1616' }, flexGrow:1 }}>Resign</Button>
-                            <Button startIcon={<Handshake />} variant="contained" onClick={offerDraw} disabled={(gameData.status !== 'active' && gameData.status !== 'ongoing') || !!drawOffer} sx={{ bgcolor: '#0097a7', '&:hover': { bgcolor: '#007a8a' }, flexGrow:1 }}>Offer Draw</Button>
+                        <Stack direction="row" spacing={1} justifyContent="center" sx={{ my: 1 }}>
+                            <Button startIcon={<Flag />} variant="contained" size="small" onClick={resign} disabled={gameData.status !== 'active' && gameData.status !== 'ongoing'} sx={{ bgcolor: '#b71c1c', '&:hover': { bgcolor: '#9a1616' }, flexGrow:1 }}>Resign</Button>
+                            <Button startIcon={<Handshake />} variant="contained" size="small" onClick={offerDraw} disabled={(gameData.status !== 'active' && gameData.status !== 'ongoing') || !!drawOffer} sx={{ bgcolor: '#0097a7', '&:hover': { bgcolor: '#007a8a' }, flexGrow:1 }}>Offer Draw</Button>
                         </Stack>
                     )}
 
                     <Divider sx={{ borderColor: '#555', my: 1 }} />
-                    <Typography variant="overline" sx={{ color: '#999' }}>Move History</Typography>
+                    <Typography variant="overline" sx={{ color: '#999', lineHeight: 1 }}>Move History</Typography>
                     <Box sx={{ height: '100px', overflowY: 'auto', background: '#1F2327', p: 1, mb: 2, borderRadius: '4px' }}>
                         <Grid container spacing={0.5}>
                             {gameData.moves?.reduce((acc: any[], move: any, i: number) => {
@@ -256,7 +271,7 @@ const LiveTournamentGame = () => {
                         </Grid>
                     </Box>
 
-                    <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', background: '#1F2327', borderRadius: '8px', overflow: 'hidden' }}>
+                    <Box sx={{ minHeight: '250px', display: 'flex', flexDirection: 'column', background: '#1F2327', borderRadius: '8px', overflow: 'hidden' }}>
                         <Chat chat={gameData.chat || []} currentUser={currentUser} handleSendMessage={handleSendMessage} />
                     </Box>
                 </Paper>

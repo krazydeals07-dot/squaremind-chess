@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, onSnapshot, collection, query, orderBy, getDocs, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
     Container, Typography, Paper, Grid, TextField, Button, 
     Box, Avatar, CircularProgress, Tabs, Tab, LinearProgress, Divider,
@@ -25,6 +26,7 @@ const Profile = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [editableProfile, setEditableProfile] = useState<UserProfileType | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -66,13 +68,20 @@ const Profile = () => {
       if (tabValue === 2) fetchGameHistory();
   }, [tabValue, fetchGameHistory]);
 
-  const handleSave = async () => {
+ const handleSave = async () => {
     if (editableProfile && currentUser) {
-      const docRef = doc(db, 'users', currentUser.uid);
-      await setDoc(docRef, editableProfile, { merge: true });
-      setIsEditing(false);
+        setProfileLoading(true);
+        try {
+            const docRef = doc(db, 'users', currentUser.uid);
+            await setDoc(docRef, editableProfile, { merge: true });
+        } catch (error) {
+            console.error("Error saving profile: ", error);
+        } finally {
+            setProfileLoading(false);
+            setIsEditing(false);
+        }
     }
-  };
+};
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (editableProfile) {
@@ -80,16 +89,22 @@ const Profile = () => {
     }
   };
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && editableProfile) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditableProfile({ ...editableProfile, photoURL: reader.result as string });
-      };
-      reader.readAsDataURL(file);
+    if (file && editableProfile && currentUser) {
+        setUploading(true);
+        try {
+            const storageRef = ref(storage, `profile-photos/${currentUser.uid}/${file.name}`);
+            await uploadBytes(storageRef, file);
+            const photoURL = await getDownloadURL(storageRef);
+            setEditableProfile({ ...editableProfile, photoURL });
+        } catch (error) {
+            console.error("Error uploading photo: ", error);
+        } finally {
+            setUploading(false);
+        }
     }
-  };
+};
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -103,8 +118,8 @@ const Profile = () => {
     return <Container><Typography color="white" sx={{textAlign: 'center', mt: 5}}>Please log in to view your profile.</Typography></Container>;
   }
   
-  const { photoURL } = currentUser || {};
-  const { displayName = 'User', level = 1, aiStats, stats, tournamentsStats, unlockedAchievements = [] } = userProfile || {};
+  const { photoURL } = editableProfile || {};
+  const { displayName = 'User', level = 1, unlockedAchievements = [] } = userProfile || {};
   const levelProgress = level ? (level - Math.floor(level)) * 100 : 0;
   const safeUnlockedAchievements: UnlockedAchievement[] = Array.isArray(unlockedAchievements) ? unlockedAchievements : [];
 
@@ -140,7 +155,7 @@ const Profile = () => {
                         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
                             <Box sx={{ position: 'relative' }}>
                                 <Avatar 
-                                    src={isEditing ? (editableProfile?.photoURL || '') : (currentUser?.photoURL || userProfile?.photoURL || '')} 
+                                    src={photoURL || ''} 
                                     sx={{ 
                                         width: { xs: 130, md: 160 }, 
                                         height: { xs: 130, md: 160 }, 
@@ -172,8 +187,9 @@ const Profile = () => {
                                                 '&:hover': { bgcolor: '#E03D00' },
                                                 p: 1
                                             }}
+                                            disabled={uploading}
                                         >
-                                            <PhotoCamera sx={{ fontSize: '1.5rem', color: 'white' }} />
+                                            {uploading ? <CircularProgress size={24} sx={{color: 'white'}} /> : <PhotoCamera sx={{ fontSize: '1.5rem', color: 'white' }} />}
                                         </IconButton>
                                     </>
                                 )}
@@ -265,11 +281,11 @@ const Profile = () => {
 
                                 {tabValue === 0 && (
                                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, p: 0 }}>
-                                      <StatsCategory title="Play with AI" stats={aiStats} icon={<SportsEsports sx={{fontSize: '1.1rem'}} />} />
+                                      <StatsCategory title="Play with AI" statType="aiStats" icon={<SportsEsports sx={{fontSize: '1.1rem'}} />} />
                                       <Divider sx={{ bgcolor: 'rgba(255,255,255,0.1)' }} />
-                                       <StatsCategory title="Play with Friends" stats={stats} icon={<People sx={{fontSize: '1.1rem'}} />} />
+                                       <StatsCategory title="Play with Friends" statType="stats" icon={<People sx={{fontSize: '1.1rem'}} />} />
                                       <Divider sx={{ bgcolor: 'rgba(255,255,255,0.1)' }} />
-                                       <StatsCategory title="Tournaments" stats={tournamentsStats} icon={<EmojiEvents sx={{fontSize: '1.1rem'}} />} />
+                                       <StatsCategory title="Tournaments" statType="tournamentsStats" icon={<EmojiEvents sx={{fontSize: '1.1rem'}} />} />
                                     </Box>
                                 )}
                                 {tabValue === 1 && (

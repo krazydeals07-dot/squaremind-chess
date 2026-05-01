@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
     Box, Button, TextField, Typography, Paper, Table, TableBody, 
     TableCell, TableContainer, TableHead, TableRow, IconButton, 
-    Alert, CircularProgress, Divider, Grid, Chip
+    Alert, CircularProgress, Divider, Grid, Chip, Accordion,
+    AccordionSummary, AccordionDetails
 } from '@mui/material';
-import { Delete, Add, Save, Event as EventIcon } from '@mui/icons-material';
-import { collection, getDocs, addDoc, deleteDoc, doc, Timestamp, query, orderBy, limit } from 'firebase/firestore';
+import { Delete, Save, Event as EventIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
+import { collection, getDocs, addDoc, deleteDoc, doc, Timestamp, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { format } from 'date-fns';
 
@@ -31,12 +32,36 @@ const WinnerManagement: React.FC = () => {
         date: format(new Date(), 'yyyy-MM-dd')
     });
 
+    const formatDate = (dateSource: any) => {
+        if (!dateSource) return 'N/A';
+        const d = dateSource.toDate ? dateSource.toDate() : new Date(dateSource);
+        return format(d, 'PPP'); // Format like "May 1, 2026"
+    };
+
+    const groupWinnersByDate = (winnersList: Winner[]) => {
+        return winnersList.reduce((acc, winner) => {
+            const dateKey = formatDate(winner.date);
+            if (!acc[dateKey]) {
+                acc[dateKey] = [];
+            }
+            acc[dateKey].push(winner);
+            return acc;
+        }, {} as Record<string, Winner[]>);
+    };
+
     const fetchWinners = async () => {
         try {
             setLoading(true);
             const winnersRef = collection(db, 'winners');
-            // Sorting by date descending to show latest winners first
-            const q = query(winnersRef, orderBy('date', 'desc'), limit(50));
+            const ninetyDaysAgo = new Date();
+            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+            
+            const q = query(
+                winnersRef, 
+                orderBy('date', 'desc'), 
+                where('date', '>=', Timestamp.fromDate(ninetyDaysAgo))
+            );
+            
             const snapshot = await getDocs(q);
             const data = snapshot.docs.map(doc => ({ 
                 id: doc.id, 
@@ -45,7 +70,7 @@ const WinnerManagement: React.FC = () => {
             setWinners(data);
         } catch (err) {
             console.error(err);
-            setError('Failed to fetch winners. Database might need indexing.');
+            setError('Failed to fetch winners. This might require creating a composite index in Firestore. Check the browser console for a link to create it.');
         } finally {
             setLoading(false);
         }
@@ -64,7 +89,6 @@ const WinnerManagement: React.FC = () => {
         setSuccess(null);
 
         try {
-            // Convert string date from input to Firestore Timestamp
             const winnerDate = new Date(formData.date);
             await addDoc(collection(db, 'winners'), {
                 displayName: formData.displayName,
@@ -100,17 +124,13 @@ const WinnerManagement: React.FC = () => {
         }
     };
 
-    const formatDate = (dateSource: any) => {
-        if (!dateSource) return 'N/A';
-        const d = dateSource.toDate ? dateSource.toDate() : new Date(dateSource);
-        return format(d, 'PPP'); // Format like "April 10th, 2026"
-    };
+    const groupedWinners = groupWinnersByDate(winners);
 
     return (
         <Box sx={{ maxWidth: 1000 }}>
-            <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>Daily Winner Management</Typography>
+            <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold' }}>Winner Management</Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-                Announce winners for each day. These will appear in history and on the main banner.
+                Announce new winners and view the history for the last 90 days.
             </Typography>
 
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -124,54 +144,21 @@ const WinnerManagement: React.FC = () => {
                 
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={3}>
+                        {/* Form Fields... */}
                         <Grid item xs={12} sm={6} md={3}>
-                            <TextField
-                                fullWidth
-                                type="date"
-                                label="Winning Date"
-                                InputLabelProps={{ shrink: true }}
-                                value={formData.date}
-                                onChange={(e) => setFormData({...formData, date: e.target.value})}
-                                required
-                            />
+                            <TextField fullWidth type="date" label="Winning Date" InputLabelProps={{ shrink: true }} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} required />
                         </Grid>
                         <Grid item xs={12} sm={6} md={3}>
-                            <TextField
-                                fullWidth
-                                label="Winner Name"
-                                value={formData.displayName}
-                                onChange={(e) => setFormData({...formData, displayName: e.target.value})}
-                                required
-                            />
+                            <TextField fullWidth label="Winner Name" value={formData.displayName} onChange={(e) => setFormData({...formData, displayName: e.target.value})} required />
                         </Grid>
                         <Grid item xs={12} sm={6} md={3}>
-                            <TextField
-                                fullWidth
-                                label="Tournament"
-                                value={formData.tournamentName}
-                                onChange={(e) => setFormData({...formData, tournamentName: e.target.value})}
-                                placeholder="e.g. Daily Knockout"
-                                required
-                            />
+                            <TextField fullWidth label="Tournament" value={formData.tournamentName} onChange={(e) => setFormData({...formData, tournamentName: e.target.value})} placeholder="e.g. Daily Knockout" required />
                         </Grid>
                         <Grid item xs={12} sm={6} md={3}>
-                            <TextField
-                                fullWidth
-                                label="Prize"
-                                value={formData.prize}
-                                onChange={(e) => setFormData({...formData, prize: e.target.value})}
-                                placeholder="e.g. ₹500"
-                            />
+                            <TextField fullWidth label="Prize" value={formData.prize} onChange={(e) => setFormData({...formData, prize: e.target.value})} placeholder="e.g. ₹500" />
                         </Grid>
                         <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                            <Button 
-                                type="submit" 
-                                variant="contained" 
-                                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <Save />}
-                                disabled={saving}
-                                size="large"
-                                sx={{ px: 5, borderRadius: '8px' }}
-                            >
+                            <Button type="submit" variant="contained" startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <Save />} disabled={saving} size="large" sx={{ px: 5, borderRadius: '8px' }}>
                                 {saving ? 'Announcing...' : 'Save Winner'}
                             </Button>
                         </Grid>
@@ -179,40 +166,47 @@ const WinnerManagement: React.FC = () => {
                 </form>
             </Paper>
 
-            <TableContainer component={Paper} sx={{ borderRadius: '12px', border: '1px solid #e0e0e0' }}>
-                <Table>
-                    <TableHead sx={{ bgcolor: '#f8f9fa' }}>
-                        <TableRow>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Date</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Winner Name</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Tournament</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Prize</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Action</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {loading ? (
-                            <TableRow><TableCell colSpan={5} align="center" sx={{ py: 4 }}><CircularProgress /></TableCell></TableRow>
-                        ) : winners.length === 0 ? (
-                            <TableRow><TableCell colSpan={5} align="center" sx={{ py: 4 }}>No winners recorded yet.</TableCell></TableRow>
-                        ) : (
-                            winners.map((winner) => (
-                                <TableRow key={winner.id} hover>
-                                    <TableCell>
-                                        <Chip label={formatDate(winner.date)} variant="outlined" size="small" color="primary" />
-                                    </TableCell>
-                                    <TableCell sx={{ fontWeight: 600 }}>{winner.displayName}</TableCell>
-                                    <TableCell>{winner.tournamentName}</TableCell>
-                                    <TableCell>{winner.prize}</TableCell>
-                                    <TableCell align="right">
-                                        <IconButton onClick={() => handleDelete(winner.id)} color="error" size="small"><Delete /></IconButton>
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>Winner History (Last 90 Days)</Typography>
+            <Paper sx={{ borderRadius: '12px', border: '1px solid #e0e0e0', overflow: 'hidden' }}>
+                {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+                ) : Object.keys(groupedWinners).length === 0 ? (
+                    <Typography align="center" sx={{ py: 5 }}>No winners recorded in the last 90 days.</Typography>
+                ) : (
+                    Object.entries(groupedWinners).map(([date, dailyWinners], index) => (
+                        <Accordion key={date} defaultExpanded={index === 0} sx={{ boxShadow:'none', '&:before': { display: 'none' }, borderBottom: index < Object.keys(groupedWinners).length - 1 ? '1px solid #e0e0e0' : 'none' }}>
+                            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: '#f8f9fa' }}>
+                                <Grid container justifyContent="space-between" alignItems="center" sx={{ width: '100%' }}>
+                                    <Grid item>
+                                        <Typography sx={{ fontWeight: 600 }}>{date}</Typography>
+                                    </Grid>
+                                    <Grid item>
+                                        <Chip label={`${dailyWinners.length} Winner(s)`} size="small" color="primary" />
+                                    </Grid>
+                                </Grid>
+                            </AccordionSummary>
+                            <AccordionDetails sx={{ p: 0 }}>
+                                <TableContainer>
+                                    <Table size="small">
+                                        <TableBody>
+                                            {dailyWinners.map((winner) => (
+                                                <TableRow key={winner.id} hover>
+                                                    <TableCell sx={{ fontWeight: 600 }}>{winner.displayName}</TableCell>
+                                                    <TableCell>{winner.tournamentName}</TableCell>
+                                                    <TableCell>{winner.prize}</TableCell>
+                                                    <TableCell align="right">
+                                                        <IconButton onClick={() => handleDelete(winner.id)} color="error" size="small"><Delete /></IconButton>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+                            </AccordionDetails>
+                        </Accordion>
+                    ))
+                )}
+            </Paper>
         </Box>
     );
 };

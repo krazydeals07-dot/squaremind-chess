@@ -77,7 +77,12 @@ export const useChessLogic = (gameData: GameData | null) => {
             
             if (moveAttempt) {
                 console.log(`Valid move detected: ${fromSquare} to ${square}`);
-                makeMove({ from: fromSquare, to: square, promotion: 'q' });
+                const piece = game.get(fromSquare);
+                const moveOptions: { from: Square, to: Square, promotion?: string } = { from: fromSquare, to: square };
+                if (piece && piece.type === 'p' && (square[1] === '8' || square[1] === '1')) {
+                    moveOptions.promotion = 'q';
+                }
+                makeMove(moveOptions);
                 setFromSquare(null);
                 setOptionSquares({});
             } else {
@@ -108,7 +113,12 @@ export const useChessLogic = (gameData: GameData | null) => {
         
         if (isValid) {
             console.log(`Valid drop move: ${sourceSquare} to ${targetSquare}`);
-            makeMove({ from: sourceSquare, to: targetSquare, promotion: 'q' });
+            const piece = game.get(sourceSquare);
+            const moveOptions: { from: Square, to: Square, promotion?: string } = { from: sourceSquare, to: targetSquare };
+            if (piece && piece.type === 'p' && (targetSquare[1] === '8' || targetSquare[1] === '1')) {
+                moveOptions.promotion = 'q';
+            }
+            makeMove(moveOptions);
             setFromSquare(null);
             setOptionSquares({});
             return true;

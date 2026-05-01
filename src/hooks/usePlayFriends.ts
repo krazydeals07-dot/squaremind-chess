@@ -33,7 +33,6 @@ export const usePlayFriends = (gameId: string, initialGameData: GameData) => {
     const [optionSquares, setOptionSquares] = useState<{ [key: string]: React.CSSProperties }>({});
     const [pendingPromotion, setPendingPromotion] = useState<{ from: Square; to: Square } | null>(null);
 
-    const hasUpdatedStats = useRef(false);
     const prevFenRef = useRef(initialGameData.fen);
     const audioRefs = useRef<Record<string, HTMLAudioElement>>({});
 
@@ -85,7 +84,6 @@ export const usePlayFriends = (gameId: string, initialGameData: GameData) => {
                     const moves = data.moves || [];
                     const lastSan = moves[moves.length - 1];
 
-                    // Play sound for opponent moves (snapshot updates when it's NOT our local turn)
                     if (game.turn() !== playerColor) {
                         if (lastSan) {
                             if (lastSan.includes('#')) {
@@ -181,92 +179,6 @@ export const usePlayFriends = (gameId: string, initialGameData: GameData) => {
         };
         finalizeGameStatus();
     }, [game, gameData?.status, gameId, userId, gameData?.players.white]);
-
-    useEffect(() => {
-        const updateMyStats = async () => {
-            if (gameData?.status === 'gameOver' && !hasUpdatedStats.current && userId) {
-                hasUpdatedStats.current = true;
-                
-                const result = gameData.result;
-                const userRef = doc(db, 'users', userId);
-                
-                try {
-                    const userSnap = await getDoc(userRef);
-                    if (!userSnap.exists()) return;
-
-                    const userData = userSnap.data();
-                    const currentStats = userData.stats || { gamesPlayed: 0, totalGames: 0, gamesWon: 0, totalWins: 0, gamesLost: 0, totalLosses: 0, draws: 0, rating: 1200, elo: 1200 };
-                    const currentFriendsStats = userData.friendsStats || { gamesPlayed: 0, gamesWon: 0, gamesLost: 0, draws: 0, winPercentage: 0, elo: 1200 };
-
-                    const isWinner = result.resultType === 'win' && userId === result.winnerId;
-                    const isDraw = result.resultType === 'draw';
-                    const isLoser = result.resultType === 'win' && userId !== result.winnerId;
-
-                    const newFriendsGamesWon = isWinner ? (currentFriendsStats.gamesWon || 0) + 1 : (currentFriendsStats.gamesWon || 0);
-                    const newFriendsGamesLost = isLoser ? (currentFriendsStats.gamesLost || 0) + 1 : (currentFriendsStats.gamesLost || 0);
-                    const newFriendsDraws = isDraw ? (currentFriendsStats.draws || 0) + 1 : (currentFriendsStats.draws || 0);
-                    const newFriendsGamesPlayed = newFriendsGamesWon + newFriendsGamesLost + newFriendsDraws;
-                    const newFriendsElo = isDraw ? (currentFriendsStats.elo || 1200) + 5 : (isWinner ? (currentFriendsStats.elo || 1200) + 15 : Math.max(800, (currentFriendsStats.elo || 1200) - 10));
-
-                    const updatedFriendsStats = {
-                        gamesPlayed: newFriendsGamesPlayed,
-                        gamesWon: newFriendsGamesWon,
-                        gamesLost: newFriendsGamesLost,
-                        draws: newFriendsDraws,
-                        winPercentage: newFriendsGamesPlayed > 0 ? Math.round((newFriendsGamesWon / newFriendsGamesPlayed) * 100) : 0,
-                        elo: newFriendsElo
-                    };
-
-                    const newTotalWins = isWinner ? ((currentStats.totalWins || currentStats.gamesWon || 0) + 1) : (currentStats.totalWins || currentStats.gamesWon || 0);
-                    const newTotalLosses = isLoser ? ((currentStats.totalLosses || currentStats.gamesLost || 0) + 1) : (currentStats.totalLosses || currentStats.gamesLost || 0);
-                    const newTotalDraws = isDraw ? ((currentStats.draws || 0) + 1) : (currentStats.draws || 0);
-                    const newTotalGames = newTotalWins + newTotalLosses + newTotalDraws;
-                    const newRating = isDraw ? (currentStats.rating || 1200) + 5 : (isWinner ? (currentStats.rating || 1200) + 15 : Math.max(800, (currentStats.rating || 1200) - 10));
-
-                    const updatedStats = {
-                        ...currentStats,
-                        gamesPlayed: newTotalGames,
-                        totalGames: newTotalGames,
-                        gamesWon: newTotalWins,
-                        totalWins: newTotalWins,
-                        gamesLost: newTotalLosses,
-                        totalLosses: newTotalLosses,
-                        draws: newTotalDraws,
-                        rating: newRating,
-                        elo: newRating,
-                        winPercentage: newTotalGames > 0 ? Math.round((newTotalWins / newTotalGames) * 100) : 0
-                    };
-
-                    await updateDoc(userRef, {
-                        stats: updatedStats,
-                        friendsStats: updatedFriendsStats
-                    });
-
-                    const historyRef = doc(collection(userRef, 'gameHistory'), gameId);
-                    const opponentId = userId === gameData.players.white ? gameData.players.black : gameData.players.white;
-                    const opponentSnap = await getDoc(doc(db, 'users', opponentId));
-                    const opponentData = opponentSnap.data();
-
-                    await setDoc(historyRef, {
-                        gameId,
-                        opponent: { 
-                            uid: opponentId, 
-                            name: opponentData?.displayName || 'Opponent', 
-                            photoURL: opponentData?.photoURL 
-                        },
-                        result: isWinner ? 'win' : (isLoser ? 'loss' : 'draw'),
-                        playedAt: serverTimestamp()
-                    });
-
-                    console.log("Stats updated successfully for user:", userId);
-                } catch (e) {
-                    console.error("Error updating stats:", e);
-                    hasUpdatedStats.current = false;
-                }
-            }
-        };
-        updateMyStats();
-    }, [gameData?.status, userId, gameId, gameData?.players.white, gameData?.players.black, gameData?.result]);
 
     useEffect(() => {
         const showModal = async () => {

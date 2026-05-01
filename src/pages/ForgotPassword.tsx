@@ -55,7 +55,7 @@ const ForgotPassword = () => {
         </Typography>
 
         <Typography variant="body2" sx={{ color: '#94a3b8', mb: 3, textAlign: 'center' }}>
-          Enter your email and we'll send you a link to reset your password.
+          Enter your email and we&apos;ll send you a link to reset your password.
         </Typography>
 
         {error && <Alert severity="error" sx={{ mb: 2, width: '100%', borderRadius: '8px' }}>{error}</Alert>}

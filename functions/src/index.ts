@@ -4,42 +4,36 @@ import * as admin from "firebase-admin";
 admin.initializeApp();
 const db = admin.firestore();
 
-/**
- * This function triggers when a game document is updated.
- * It handles the tournament progression logic when a game ends.
- * Final synchronization of Cloud Function with Map-based match storage.
- */
 export const onGameEnd = functions.firestore
     .document("games/{gameId}")
     .onUpdate(async (change, context) => {
-
         const previousGameData = change.before.data();
         const newGameData = change.after.data();
 
-        // Proceed only if the game status has just changed to 'ended'.
-        if (newGameData.status !== "ended" || previousGameData.status === "ended") {
+        // Proceed only if the game has just finished
+        if (newGameData.status !== "ended" && newGameData.status !== "gameOver") {
+            return null;
+        }
+        // And if it wasn't already finished
+        if (previousGameData.status === "ended" || previousGameData.status === "gameOver") {
             return null;
         }
 
         const { gameId } = context.params;
-        const { winner: winnerId, tournamentId, matchId: providedMatchId, players } = newGameData;
+        const { winner: winnerId, tournamentId, matchId: providedMatchId, players, result } = newGameData;
 
-        // Validation for tournament match
-        if (!tournamentId || !providedMatchId) {
-            functions.logger.info(`Game ${gameId} is not a valid tournament match. Skipping logic.`);
+        // Determine winner and loser from game data
+        const finalWinnerId = winnerId || result?.winnerId;
+        const isDraw = result?.resultType === "draw" || finalWinnerId === "draw";
+
+        if (isDraw) {
+            functions.logger.info(`Game ${gameId} is a draw. No stat updates.`);
+            // Optional: Handle draw stats if needed
             return null;
         }
 
-        functions.logger.info(`[Tournament ${tournamentId}] Processing game end: ${gameId} for Match ${providedMatchId}`);
-
-        // Handle Draw (No progression for now)
-        if (winnerId === "draw") {
-            functions.logger.info(`[Tournament ${tournamentId}] Game ${gameId} ended in a draw.`);
-            return null;
-        }
-
-        if (!winnerId) {
-            functions.logger.error(`[Tournament ${tournamentId}] No winner identified for ended game ${gameId}`);
+        if (!finalWinnerId) {
+            functions.logger.error(`No winner identified for ended game ${gameId}.`);
             return null;
         }
 
@@ -47,136 +41,133 @@ export const onGameEnd = functions.firestore
         const blackId = players?.black;
 
         if (!whiteId || !blackId) {
-            functions.logger.error(`[Tournament ${tournamentId}] Player IDs missing in game document ${gameId}`);
+            functions.logger.error(`Player IDs missing in game document ${gameId}`);
             return null;
         }
 
-        const loserId = whiteId === winnerId ? blackId : whiteId;
+        const loserId = whiteId === finalWinnerId ? blackId : whiteId;
+        const batch = db.batch();
+        const winnerRef = db.collection("users").doc(finalWinnerId);
+        const loserRef = db.collection("users").doc(loserId);
 
-        // Update User Statistics
-        try {
-            const batch = db.batch();
-            const winnerRef = db.collection("users").doc(winnerId);
-            const loserRef = db.collection("users").doc(loserId);
-            
+        const isTournamentGame = tournamentId && providedMatchId;
+
+        if (isTournamentGame) {
+            // --- TOURNAMENT GAME STATS ---
+            functions.logger.info(`[Tournament ${tournamentId}] Updating TOURNAMENT stats for game ${gameId}.`);
             batch.update(winnerRef, {
-                "stats.totalWins": admin.firestore.FieldValue.increment(1),
-                "stats.totalGames": admin.firestore.FieldValue.increment(1),
+                "tournamentsStats.gamesWon": admin.firestore.FieldValue.increment(1),
+                "tournamentsStats.gamesPlayed": admin.firestore.FieldValue.increment(1),
                 "stats.rating": admin.firestore.FieldValue.increment(15),
                 lastUpdated: admin.firestore.FieldValue.serverTimestamp()
             });
-
             batch.update(loserRef, {
-                "stats.totalLosses": admin.firestore.FieldValue.increment(1),
-                "stats.totalGames": admin.firestore.FieldValue.increment(1),
+                "tournamentsStats.gamesLost": admin.firestore.FieldValue.increment(1),
+                "tournamentsStats.gamesPlayed": admin.firestore.FieldValue.increment(1),
                 "stats.rating": admin.firestore.FieldValue.increment(-10),
                 lastUpdated: admin.firestore.FieldValue.serverTimestamp()
             });
-            await batch.commit();
-            functions.logger.info(`[Tournament ${tournamentId}] Stats updated for winner ${winnerId} and loser ${loserId}`);
-        } catch (error) {
-            functions.logger.error(`[Tournament ${tournamentId}] Error updating user stats:`, error);
+        } else {
+            // --- REGULAR "Play with Friends" GAME STATS ---
+            functions.logger.info(`Updating REGULAR stats for game ${gameId}.`);
+            batch.update(winnerRef, {
+                "stats.gamesWon": admin.firestore.FieldValue.increment(1),
+                "stats.gamesPlayed": admin.firestore.FieldValue.increment(1),
+                "stats.rating": admin.firestore.FieldValue.increment(10),
+                lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+            });
+            batch.update(loserRef, {
+                "stats.gamesLost": admin.firestore.FieldValue.increment(1),
+                "stats.gamesPlayed": admin.firestore.FieldValue.increment(1),
+                "stats.rating": admin.firestore.FieldValue.increment(-5),
+                lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+            });
         }
 
-        const tournamentRef = db.collection("tournaments").doc(tournamentId);
-
+        // Commit the stat updates
         try {
-            await db.runTransaction(async (transaction) => {
-                const tournamentDoc = await transaction.get(tournamentRef);
-                if (!tournamentDoc.exists) {
-                    functions.logger.warn(`[Tournament ${tournamentId}] Not found in Firestore.`);
-                    return;
-                }
+            await batch.commit();
+            functions.logger.info(`Stats updated successfully for game ${gameId}. Winner: ${finalWinnerId}, Loser: ${loserId}.`);
+        } catch (error) {
+            functions.logger.error(`Error committing stats batch for game ${gameId}:`, error);
+            return; // Exit if we can't update stats
+        }
 
-                const tournamentData = tournamentDoc.data()!;
-                const matches = tournamentData.matches || {};
+        // --- TOURNAMENT PROGRESSION LOGIC (only if it's a tournament game) ---
+        if (isTournamentGame) {
+            functions.logger.info(`[Tournament ${tournamentId}] Continuing with progression logic for match ${providedMatchId}.`);
+            const tournamentRef = db.collection("tournaments").doc(tournamentId);
+            try {
+                await db.runTransaction(async (transaction) => {
+                    const tournamentDoc = await transaction.get(tournamentRef);
+                    if (!tournamentDoc.exists) {
+                        throw new Error(`Tournament ${tournamentId} not found.`);
+                    }
 
-                if (!matches[providedMatchId]) {
-                    functions.logger.error(`[Tournament ${tournamentId}] Match ${providedMatchId} not found in tournament.`);
-                    return;
-                }
-
-                const currentMatch = matches[providedMatchId];
-                const winnerPlayer = tournamentData.players?.find((p: any) => p.uid === winnerId) || 
-                                     (currentMatch.player1?.uid === winnerId ? currentMatch.player1 : currentMatch.player2);
-
-                if (!winnerPlayer) {
-                    functions.logger.error(`[Tournament ${tournamentId}] Winner ${winnerId} details not found.`);
-                }
-
-                // 1. Update Current Match status and winner in the Map
-                const tournamentUpdates: any = {
-                    [`matches.${providedMatchId}.winnerId`]: winnerId,
-                    [`matches.${providedMatchId}.status`]: "completed",
-                    matchesCompleted: admin.firestore.FieldValue.increment(1),
-                    matchesOngoing: admin.firestore.FieldValue.increment(-1)
-                };
-
-                // 2. Check if this was the Final (no nextMatchId)
-                const nextMatchId = currentMatch.nextMatchId;
-                if (!nextMatchId) {
-                    tournamentUpdates.status = "completed";
-                    tournamentUpdates.winner = winnerPlayer || { uid: winnerId, displayName: "Winner" };
-                    tournamentUpdates.endDate = admin.firestore.FieldValue.serverTimestamp();
+                    const tournamentData = tournamentDoc.data()!;
+                    const matches = tournamentData.matches || {};
+                    const currentMatch = matches[providedMatchId];
                     
-                    transaction.update(tournamentRef, tournamentUpdates);
-                    functions.logger.info(`[Tournament ${tournamentId}] Champion declared in Final Match ${providedMatchId}: ${winnerId}`);
-                    return;
-                }
+                    if (!currentMatch) {
+                        throw new Error(`Match ${providedMatchId} not found in tournament ${tournamentId}.`);
+                    }
 
-                // 3. Promote winner to next match in the Map
-                if (!matches[nextMatchId]) {
-                    functions.logger.error(`[Tournament ${tournamentId}] Next match ${nextMatchId} missing from matches.`);
-                    transaction.update(tournamentRef, tournamentUpdates);
-                    return;
-                }
+                    const winnerPlayer = tournamentData.players?.find((p: any) => p.uid === finalWinnerId) || 
+                                         (currentMatch.player1?.uid === finalWinnerId ? currentMatch.player1 : currentMatch.player2);
 
-                const playerSlot = currentMatch.nextMatchSlot || "player1";
-                tournamentUpdates[`matches.${nextMatchId}.${playerSlot}`] = winnerPlayer || { uid: winnerId, displayName: "Winner" };
-
-                // 4. Check if both players are ready in the next match
-                const nextMatchData = { ...matches[nextMatchId] };
-                nextMatchData[playerSlot] = winnerPlayer || { uid: winnerId, displayName: "Winner" };
-                
-                const p1 = nextMatchData.player1;
-                const p2 = nextMatchData.player2;
-
-                if (p1 && p2 && p1.uid && p2.uid) {
-                    functions.logger.info(`[Tournament ${tournamentId}] Next Match ${nextMatchId} ready: ${p1.uid} vs ${p2.uid}.`);
-
-                    const newGameRef = db.collection("games").doc();
-                    const newGameId = newGameRef.id;
-                    
-                    const newGame = {
-                        players: { white: p1.uid, black: p2.uid },
-                        playerNames: { white: p1.displayName || "White Player", black: p2.displayName || "Black Player" },
-                        status: "active",
-                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                        lastMove: admin.firestore.FieldValue.serverTimestamp(),
-                        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-                        moves: [],
-                        timers: { w: 480, b: 480 },
-                        timeControl: { initial: 480, increment: 2 },
-                        tournamentId: tournamentId,
-                        matchId: nextMatchId,
-                        gameId: newGameId
+                    const tournamentUpdates: any = {
+                        [`matches.${providedMatchId}.winnerId`]: finalWinnerId,
+                        [`matches.${providedMatchId}.status`]: "completed",
+                        matchesCompleted: admin.firestore.FieldValue.increment(1),
+                        matchesOngoing: admin.firestore.FieldValue.increment(-1)
                     };
 
-                    transaction.set(newGameRef, newGame);
-                    tournamentUpdates[`matches.${nextMatchId}.gameId`] = newGameId;
-                    tournamentUpdates[`matches.${nextMatchId}.status`] = "active";
-                    tournamentUpdates.matchesOngoing = admin.firestore.FieldValue.increment(0); // Ongoing counter adjustment if needed
-                    
-                    functions.logger.info(`[Tournament ${tournamentId}] Created game ${newGameId} for match ${nextMatchId}.`);
-                } else {
-                    functions.logger.info(`[Tournament ${tournamentId}] Winner ${winnerId} moved to ${nextMatchId} (${playerSlot}). Waiting for opponent.`);
-                }
+                    const nextMatchId = currentMatch.nextMatchId;
+                    if (!nextMatchId) {
+                        // This was the final match
+                        tournamentUpdates.status = "completed";
+                        tournamentUpdates.winner = winnerPlayer || { uid: finalWinnerId, displayName: "Winner" };
+                        tournamentUpdates.endDate = admin.firestore.FieldValue.serverTimestamp();
+                        transaction.update(tournamentRef, tournamentUpdates);
+                        functions.logger.info(`[Tournament ${tournamentId}] Champion declared: ${finalWinnerId}`);
+                    } else {
+                        // Promote winner to the next match
+                        const nextMatchData = matches[nextMatchId];
+                        if (!nextMatchData) {
+                           throw new Error(`Next match ${nextMatchId} missing from tournament ${tournamentId}.`);
+                        }
+                        const playerSlot = currentMatch.nextMatchSlot || "player1";
+                        tournamentUpdates[`matches.${nextMatchId}.${playerSlot}`] = winnerPlayer || { uid: finalWinnerId, displayName: "Winner" };
+                        
+                        // Check if the next match is now ready to start
+                        const updatedNextMatchData = { ...nextMatchData, [playerSlot]: winnerPlayer };
+                        const p1 = updatedNextMatchData.player1;
+                        const p2 = updatedNextMatchData.player2;
 
-                transaction.update(tournamentRef, tournamentUpdates);
-            });
-        } catch (error) {
-            functions.logger.error(`[Tournament ${tournamentId}] Transaction error in onGameEnd:`, error);
+                        if (p1 && p2 && p1.uid && p2.uid) {
+                             // Create a new game for the next match
+                            const newGameRef = db.collection("games").doc();
+                            const newGame = {
+                                players: { white: p1.uid, black: p2.uid },
+                                playerNames: { white: p1.displayName, black: p2.displayName },
+                                status: "active",
+                                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                                fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                                moves: [],
+                                tournamentId: tournamentId,
+                                matchId: nextMatchId,
+                                gameId: newGameRef.id
+                            };
+                            transaction.set(newGameRef, newGame);
+                            tournamentUpdates[`matches.${nextMatchId}.gameId`] = newGameRef.id;
+                            tournamentUpdates[`matches.${nextMatchId}.status`] = "active";
+                        }
+                        transaction.update(tournamentRef, tournamentUpdates);
+                    }
+                });
+            } catch (error) {
+                functions.logger.error(`[Tournament ${tournamentId}] Transaction error in onGameEnd:`, error);
+            }
         }
-
         return null;
     });

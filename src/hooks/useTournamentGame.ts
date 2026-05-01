@@ -47,13 +47,39 @@ export const useTournamentGame = (gameId: string, tournamentId?: string) => {
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const finalizationAttemptedRef = useRef(false);
     const prevFenRef = useRef<string | null>(null);
+    const userInteractedRef = useRef(false);
+
+    useEffect(() => {
+        const handleInteraction = () => {
+            userInteractedRef.current = true;
+            window.removeEventListener('click', handleInteraction);
+            window.removeEventListener('keydown', handleInteraction);
+            window.removeEventListener('touchstart', handleInteraction);
+        };
+        window.addEventListener('click', handleInteraction);
+        window.addEventListener('keydown', handleInteraction);
+        window.addEventListener('touchstart', handleInteraction);
+        return () => {
+            window.removeEventListener('click', handleInteraction);
+            window.removeEventListener('keydown', handleInteraction);
+            window.removeEventListener('touchstart', handleInteraction);
+        };
+    }, []);
 
     const playSound = useCallback((type: keyof typeof SOUNDS) => {
+        if (!userInteractedRef.current) return;
         try {
             const audio = new Audio(SOUNDS[type]);
             audio.volume = 1.0; 
             audio.currentTime = 0;
-            audio.play().catch(e => console.warn('Audio play blocked or failed:', e));
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(e => {
+                    if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') {
+                        console.warn('Audio play failed:', e);
+                    }
+                });
+            }
         } catch (e) {
             console.error('Sound error:', e);
         }
@@ -63,7 +89,7 @@ export const useTournamentGame = (gameId: string, tournamentId?: string) => {
     const isSpectator = useMemo(() => !!gameData && userId !== gameData.players.white && userId !== gameData.players.black, [gameData, userId]);
 
     const isMyTurn = useMemo(() => {
-        if (isSpectator || !myColor || !gameData || gameData.status !== 'active') return false;
+        if (isSpectator || !myColor || !gameData || (gameData.status !== 'active' && gameData.status !== 'ongoing')) return false;
         return game.turn() === myColor;
     }, [game, gameData, myColor, isSpectator]);
 
@@ -218,7 +244,7 @@ export const useTournamentGame = (gameId: string, tournamentId?: string) => {
     
     const endGame = useCallback(async (winner: string | 'draw' | null, reason: string) => {
         if (isSpectator) return;
-        if (gameId && gameData?.status === 'active') {
+        if (gameId && (gameData?.status === 'active' || gameData?.status === 'ongoing')) {
             await updateDoc(doc(db, 'games', gameId), { status: 'ended', winner, reason });
         }
     }, [gameId, gameData, isSpectator]);
@@ -227,7 +253,7 @@ export const useTournamentGame = (gameId: string, tournamentId?: string) => {
     const acceptDraw = useCallback(() => endGame('draw', 'draw'), [endGame]);
     
     const offerDraw = useCallback(async () => {
-        if (isSpectator || !gameId || gameData?.status !== 'active' || !userId || !opponentId) return;
+        if (isSpectator || !gameId || (gameData?.status !== 'active' && gameData?.status !== 'ongoing') || !userId || !opponentId) return;
         await updateDoc(doc(db, 'games', gameId), { drawOffer: { from: userId, to: opponentId } });
     }, [gameId, gameData, userId, opponentId, isSpectator]);
 
@@ -282,8 +308,8 @@ export const useTournamentGame = (gameId: string, tournamentId?: string) => {
                 newGame.load(currentFen);
                 
                 if (prevFenRef.current && prevFenRef.current !== currentFen) {
-                    const isMyMove = (newGame.turn() !== myColor); 
-                    if (!isMyMove && data.status !== 'ended') {
+                    // Always play sound when FEN changes (remote move), regardless of color
+                    if (data.status !== 'ended') {
                         if (newGame.inCheck()) {
                             playSound('check');
                         } else {
@@ -338,7 +364,7 @@ export const useTournamentGame = (gameId: string, tournamentId?: string) => {
     }, [gameId, userId, modalDismissed, isModalOpen, finalizeTournamentMatch, myColor, isSpectator, playSound, gameData?.status]);
 
     useEffect(() => {
-        if (!gameData || gameData.status !== 'active' || isSpectator) {
+        if (!gameData || (gameData.status !== 'active' && gameData.status !== 'ongoing') || isSpectator) {
             if(timerIntervalRef.current) clearInterval(timerIntervalRef.current);
             return;
         }
